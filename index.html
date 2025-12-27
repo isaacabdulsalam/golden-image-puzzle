@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>أحجية الصور - الاحتفال الذهبي</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    <style>
+        :root { --main: #d4af37; --dark: #1a1a2e; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--dark); color: white; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        
+        #puzzle-board { 
+            display: grid; 
+            gap: 2px; 
+            border: 5px solid #b8860b; 
+            background: #000; 
+            position: relative;
+            direction: ltr; /* لضمان الترتيب البرمجي الصحيح */
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+        }
+
+        .tile { 
+            background-image: url('img.jpeg'); 
+            background-repeat: no-repeat; 
+            cursor: pointer; 
+            box-sizing: border-box;
+            transition: transform 0.2s;
+        }
+
+        .selected { outline: 5px solid var(--main); outline-offset: -5px; filter: brightness(1.3); transform: scale(0.95); }
+        .stats { background: #16213e; padding: 15px; border-radius: 10px; margin: 15px; display: flex; gap: 30px; font-size: 1.2rem; border: 1px solid var(--main); }
+        button { padding: 12px 25px; background: var(--main); color: #000; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        button:hover { background: #fff; transform: translateY(-2px); }
+        .won-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; }
+        h1 { color: var(--main); text-shadow: 0 0 10px rgba(212, 175, 55, 0.5); }
+    </style>
+</head>
+<body>
+
+    <h1>🧩 تحدي الأحجية الذهبي</h1>
+    
+    <div class="controls">
+        <select id="diff" style="padding: 10px; border-radius: 5px;">
+            <option value="2">سهل (2x2)</option>
+            <option value="3">متوسط (3x3)</option>
+            <option value="4">صعب (4x4)</option>
+        </select>
+        <button onclick="initGame()">لعبة جديدة ✨</button>
+    </div>
+
+    <div class="stats">
+        <span>الحركات: <b id="m-count" style="color:var(--main)">0</b></span>
+        <span>النقاط: <b id="s-count" style="color:var(--main)">0</b></span>
+    </div>
+
+    <div id="puzzle-board"></div>
+
+    <div id="win-msg" class="won-overlay">
+        <h2 style="color: var(--main); font-size: 3.5rem;">👑 مبروك الفوز! 👑</h2>
+        <p id="final-stats" style="font-size: 1.5rem; margin: 20px 0;"></p>
+        <button onclick="initGame()">ابدأ تحدي جديد 🔄</button>
+    </div>
+
+    <script>
+        let size, moves = 0, totalScore = 0, firstSelection = null, isGameOver = false;
+        let currentOrder = [];
+        const board = document.getElementById('puzzle-board');
+
+        function initGame() {
+            size = parseInt(document.getElementById('diff').value);
+            moves = 0;
+            firstSelection = null;
+            isGameOver = false;
+            document.getElementById('m-count').innerText = moves;
+            document.getElementById('win-msg').style.display = 'none';
+            
+            currentOrder = Array.from({length: size * size}, (_, i) => i);
+            
+            do {
+                currentOrder.sort(() => Math.random() - 0.5);
+            } while (checkWin());
+
+            drawBoard();
+        }
+
+        function drawBoard() {
+            board.innerHTML = '';
+            const bSize = 400;
+            const tSize = bSize / size;
+            
+            board.style.width = bSize + 'px';
+            board.style.height = bSize + 'px';
+            board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+
+            currentOrder.forEach((val, i) => {
+                const tile = document.createElement('div');
+                tile.className = 'tile';
+                tile.style.width = tSize + 'px';
+                tile.style.height = tSize + 'px';
+                tile.style.backgroundSize = `400px 400px`;
+
+                const r = Math.floor(val / size);
+                const c = val % size;
+                tile.style.backgroundPosition = `-${c * tSize}px -${r * tSize}px`;
+
+                tile.onclick = () => onTileClick(i);
+                board.appendChild(tile);
+            });
+        }
+
+        function onTileClick(idx) {
+            if (isGameOver) return;
+
+            if (firstSelection === null) {
+                firstSelection = idx;
+                board.children[idx].classList.add('selected');
+            } else {
+                if (firstSelection !== idx) {
+                    [currentOrder[firstSelection], currentOrder[idx]] = [currentOrder[idx], currentOrder[firstSelection]];
+                    moves++;
+                    document.getElementById('m-count').innerText = moves;
+                }
+                
+                board.children[firstSelection].classList.remove('selected');
+                firstSelection = null;
+                drawBoard();
+
+                // فحص تلقائي بعد كل حركة
+                if (checkWin()) {
+                    triggerGoldenWin();
+                }
+            }
+        }
+
+        function checkWin() {
+            return currentOrder.every((val, i) => val === i);
+        }
+
+        function triggerGoldenWin() {
+            isGameOver = true;
+            setTimeout(() => {
+                document.getElementById('win-msg').style.display = 'flex';
+                const roundPoints = Math.max((size * size * 100) - (moves * 5), 100);
+                totalScore += roundPoints;
+                document.getElementById('s-count').innerText = totalScore;
+                document.getElementById('final-stats').innerText = `لقد أتممت اللوحة في ${moves} حركة! \n مجموع نقاطك الذهبية: ${totalScore}`;
+
+                // احتفال القصاصات الذهبية
+                const end = Date.now() + 5000;
+                const goldenColors = ['#FFD700', '#DAA520', '#B8860B', '#F0E68C'];
+
+                (function frame() {
+                    confetti({
+                        particleCount: 15,
+                        angle: 60,
+                        spread: 70,
+                        origin: { x: 0 },
+                        colors: goldenColors,
+                        scalar: 1.2
+                    });
+                    confetti({
+                        particleCount: 15,
+                        angle: 120,
+                        spread: 70,
+                        origin: { x: 1 },
+                        colors: goldenColors,
+                        scalar: 1.2
+                    });
+
+                    if (Date.now() < end) {
+                        requestAnimationFrame(frame);
+                    }
+                }());
+            }, 300);
+        }
+
+        window.onload = initGame;
+    </script>
+</body>
+</html>
